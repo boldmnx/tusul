@@ -1,18 +1,22 @@
+import json
 import random
 from collections import defaultdict
+from django.http import JsonResponse
 from django.shortcuts import render
 from .models import *
 import itertools
 
 DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-TIMES = ['08:00-09:30', '09:40-11:10', '11:20-12:50', '13:30-15:00', '15:10-16:40']
+TIMES = ['08:00-09:30', '09:40-11:10',
+         '11:20-12:50', '13:30-15:00', '15:10-16:40']
 
 
 def schedule_view(request):
     data = Course.objects.all().values("name", "teacher", "lesson_type",
                                        "available_room_types", "group_list")
     course = []
-    grouped = defaultdict(lambda: {'available_room_types': None, 'group_list': []})
+    grouped = defaultdict(
+        lambda: {'available_room_types': None, 'group_list': []})
 
     # Лекцүүдийг нэгтгэх
     for item in data:
@@ -39,15 +43,34 @@ def schedule_view(request):
 
     # Schedule үүсгэх
     schedules = generate_schedules(course, num_schedules=10)
+    formatted_schedules = []
+    for i, sch in enumerate(schedules, 1):
+        entries = []
+        for day, time, room, course in sch:
+            entries.append({
+                "day": day,
+                "time": time,
+                "course_name": course["name"],
+                "lesson_type": course["lesson_type"],
+                "room": room["id"],
+                "teacher": course["teacher"],
+                "groups": course["group_list"]
+            })
+        formatted_schedules.append({
+            "schedule_number": i,
+            "entries": entries
+        })
 
+    return JsonResponse(formatted_schedules, safe=False)
     # Хэвлэх
-    for i, sch in enumerate(schedules[:10], 1):
-        print(f"--- Хуваарь {i} ---")
-        for d, t, r, c in sch:
-            print(f"{d} {t} | {c['name']} ({c['lesson_type']}) | өрөө {r['id']} | багш {c['teacher']} | анги {c['group_list']}")
-        print()
-
-    return render(request, "schedule.html")
+    # for i, sch in enumerate(schedules[:3], 1):
+    #     print(f"--- Хуваарь {i} ---")
+    #     for d, t, r, c in sch:
+    #         print(
+    #             f"{d} {t} | {c['name']} ({c['lesson_type']}) | өрөө {r['id']} | багш {c['teacher']} | анги {c['group_list']}")
+    #     print()
+    # return JsonResponse(schedules, safe=False)
+    # return render(request, "schedule.html")
 
 
 def is_conflict(schedule, new):
@@ -64,6 +87,8 @@ def is_conflict(schedule, new):
             if groups & set(c["group_list"]):
                 return True
     return False
+
+
 def generate_schedules(courses, num_schedules=10):
     rooms = list(Room.objects.all().values("room_type", "id"))
     room_map = defaultdict(list)
