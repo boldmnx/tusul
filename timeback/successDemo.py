@@ -58,11 +58,14 @@ courses = [
     # 8
 ]
 
+
 # Өрөөний төрлөөр mapping
 room_map = {r["roomType"]: r["rooms"] for r in rooms}
+# room_map:{'лекц': [{'id': '102'}], 'лаб': [{'id': '302'}], 'семинар': [{'id': '301'}]}
 
 # Боломжит бүх slot (өдөр + цаг)
 all_slots = [(d, t) for d in days for t in times]
+# all_slots:[('Mon', '08:00-09:30'), ('Mon', '09:40-11:10'), ('Mon', '11:20-12:50'),
 
 
 def is_conflict(schedule, new):
@@ -96,7 +99,6 @@ def generate_schedules(courses):
                 for day, time in all_slots:
                     opts.append((day, time, room, c))
         options_per_course.append(opts)
-
     # Cartesian product - course бүрийн сонголтуудыг хослуулах
     all_combinations = itertools.product(*options_per_course)
 
@@ -111,6 +113,7 @@ def generate_schedules(courses):
             schedule.append(entry)
         if valid:
             valid_schedules.append(schedule)
+
     return valid_schedules
 
 
@@ -118,9 +121,3 @@ schedules = generate_schedules(courses)
 
 print(f"Нийт боломжит хувилбар: {len(schedules)}\n")
 
-for i, sch in enumerate(schedules[:10], 1):  # эхний 10-г хэвлэе
-    print(f"--- Хуваарь {i} ---")
-    for d, t, r, c in sch:
-        print(
-            f"{d} {t} | {c['name']} ({c['sessions']}) | өрөө {r['id']} | багш {c['teacher_id']} | анги {c['group_list']}")
-    print()
