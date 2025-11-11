@@ -6,7 +6,7 @@ from django.shortcuts import render
 from .models import *
 
 DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-TIMES = [ '09:40-11:10',
+TIMES = ['08:00-09:30', '09:40-11:10',
          '11:20-12:50', '13:30-15:00', '15:10-16:40']
 
 

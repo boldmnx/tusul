@@ -1,149 +1,130 @@
-import random
+from django.http import JsonResponse
+from ortools.sat.python import cp_model
 from collections import defaultdict
-import sqlite3 as sql
-from django.shortcuts import render
-from .models import *
 import itertools
 
+from .models import Course, Room
 
-DAYS = [
-    'Mon',
-    'Tue',
-    'Wed',
-    'Thu',
-    'Fri',
-    'Sat',
-]
-
-TIMES = [
-    '08:00-09:30',
-    '09:40-11:10',
-    '11:20-12:50',
-    '13:30-15:00',
-    '15:10-16:40',
-]
-
+DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+TIMES = ['09:40-11:10', '11:20-12:50', '13:30-15:00', '15:10-16:40']
 
 def schedule_view(request):
+    data = Course.objects.select_related("teacher").prefetch_related("group_list").all()
 
-    data = Course.objects.all().values("name", "teacher", "lesson_type",
-                                       "available_room_types", "group_list")
-    course = []
-    grouped = defaultdict(
-        lambda: {'available_room_types': None, 'group_list': []})
+    courses = []
+    grouped = defaultdict(lambda: {'type': None, 'groups': []})
 
+    # Лекц нэгтгэх
     for item in data:
-        if item['lesson_type'] == 'лекц':
-            key = (item['name'], item['teacher'], item['lesson_type'])
-            grouped[key]['available_room_types'] = item['available_room_types']
-            grouped[key]['group_list'].append(item['group_list'])
+        group_names = list(item.group_list.values_list("hutulbur","group_name"))
+        if item.lesson_type == "лекц":
+            key = (item.name, item.teacher.name)
+            grouped[key]['type'] = item.available_room_types
+            grouped[key]['groups'].append(group_names)
         else:
-            # харин лаб, семинар гэх мэт нь тус бүр тусдаа мөр болно
-            course.append({
-                'name': item['name'],
-                'teacher': item['teacher'],
-                'lesson_type': item['lesson_type'],
-                'available_room_types': item['available_room_types'],
-                'group_list': [item['group_list']]
+            courses.append({
+                "name": item.name,
+                "teacher": item.teacher.name,
+                "lesson_type": item.lesson_type,
+                "available_room_types": item.available_room_types,
+                "group_list": group_names,
             })
-    for (name, teacher, lesson_type), values in grouped.items():
-        course.append({
-            'name': name,
-            'teacher': teacher,
-            'lesson_type': lesson_type,
-            'available_room_types': values['available_room_types'],
-            'group_list': values['group_list']
+
+    # Consolidated lectures
+    for (name, teacher), info in grouped.items():
+        all_groups = [g for gl in info['groups'] for g in gl]
+        courses.insert(0, {
+            "name": name,
+            "teacher": teacher,
+            "lesson_type": "лекц",
+            "available_room_types": info["type"],
+            "group_list": all_groups
         })
-    # done
 
-    schedules = generate_schedules(course)
-    for i, sch in enumerate(schedules[:3], 1):  # эхний 10-г хэвлэе
-        print(f"--- Хуваарь {i} ---")
-    for d, t, r, c in sch:
-        print(
-            f"{d} {t} | {c['name']} ({c['lesson_type']}) | өрөө {r['id']} | багш {c['teacher']} | анги {c['group_list']}")
-    print()
-    return render(request, "schedule.html")
+    # Rooms
+    db_rooms = list(Room.objects.all().values("room_type", "room_number","id"))
+    rooms = defaultdict(list)
+    for r in db_rooms:
+        for rid in r["room_number"]:
+            real_id = int(rid['id']) if isinstance(rid, dict) else int(rid)
+            rooms[r["room_type"]].append(real_id)
 
-
-def generate_schedules(courses):
-    rooms = Room.objects.all().values("room_type", "room_number")
-    room_map = {r["room_type"]: r["room_number"] for r in rooms}
-    # done
-
-    all_slots = [(d, t) for d in DAYS for t in TIMES]
-
-    options_per_course = []
-    for c in courses:
-        opts = []
-        for room_type in c['available_room_types']:
-            for room in room_map[room_type]:
-                for day, time in all_slots:
-                    opts.append((day, time, room, c))
-        options_per_course.append(opts)
-
-    all_combinations = itertools.product(*options_per_course)
-
-    if len(courses) <= 4:
-        all_combinations = itertools.product(*options_per_course)
-    else:
-        # 4-өөс дээш бол random эсвэл heuristic
-        return generate_schedules_random(courses)
-
-    valid_schedules = []
-    for comb in all_combinations:
-        schedule = []
-        valid = True
-        for entry in comb:
-            if is_conflict(schedule, entry):
-                valid = False
-                break
-            schedule.append(entry)
-        if valid:
-            valid_schedules.append(schedule)
-
-    return valid_schedules
+    schedules = generate_schedules_ortools(courses, rooms, num_schedules=3)
+    return JsonResponse(schedules, safe=False)
 
 
-def is_conflict(schedule, new):
-    """Шинэ хичээлийг өмнөхүүдтэй харьцуулж зөрчил шалгах"""
-    nd, nt, nr, course = new
-    teacher = course["teacher"]
-    groups = set(course["group_list"])
+def generate_schedules_ortools(courses, rooms, num_schedules=3, time_limit=10):
+    model = cp_model.CpModel()
+    slot_list = [(d, t) for d in DAYS for t in TIMES]
+    n_slots = len(slot_list)
+    n = len(courses)
 
-    for (d, t, r, c) in schedule:
-        # ижил цаг өдөр дээр шалгах
-        if d == nd and t == nt:
-            # багш давхцах эсэх
-            if c["teacher"] == teacher:
-                return True
-            # өрөө давхцах эсэх
-            if r["id"] == nr["id"]:
-                return True
-            # анги давхцах эсэх
-            if groups & set(c["group_list"]):
-                return True
-    return False
+    x_slot = {}
+    x_room = {}
 
+    for i, course in enumerate(courses):
+        x_slot[i] = model.NewIntVar(0, n_slots-1, f"slot_{i}")
+        possible_rooms = []
+        for rtype in course.get("available_room_types", []) or []:
+            possible_rooms.extend(rooms.get(rtype, []))
+        possible_rooms = list(map(int, possible_rooms))
+        if not possible_rooms:
+            raise ValueError(f"No valid rooms for course {course['name']}")
+        x_room[i] = model.NewIntVarFromDomain(cp_model.Domain.FromValues(possible_rooms), f"room_{i}")
 
-def generate_schedules_random(courses):
-    rooms = list(Room.objects.all().values("room_type", "room_number"))
-    room_map = {r["room_type"]: r["room_number"] for r in rooms}
+    # Teacher conflict
+    for i,j in itertools.combinations(range(n),2):
+        if courses[i]["teacher"] == courses[j]["teacher"]:
+            model.Add(x_slot[i] != x_slot[j])
 
-    all_slots = [(d, t) for d in DAYS for t in TIMES]
+    # Group conflict
+    for i,j in itertools.combinations(range(n),2):
+        groups_i = set(courses[i].get("group_list") or [])
+        groups_j = set(courses[j].get("group_list") or [])
+        if groups_i & groups_j:
+            model.Add(x_slot[i] != x_slot[j])
 
-    schedule = []
-    tries = 0
+    # Room conflict
+    for i,j in itertools.combinations(range(n),2):
+        same = model.NewBoolVar(f"same_slot_{i}_{j}")
+        model.Add(x_slot[i] == x_slot[j]).OnlyEnforceIf(same)
+        model.Add(x_slot[i] != x_slot[j]).OnlyEnforceIf(same.Not())
+        model.Add(x_room[i] != x_room[j]).OnlyEnforceIf(same)
 
-    while len(schedule) < len(courses) and tries < 1000:
-        tries += 1
-        course = courses[len(schedule)]
-        room_type = random.choice(course['available_room_types'])
-        room = random.choice(room_map[room_type])
-        day, time = random.choice(all_slots)
-        entry = (day, time, room, course)
+    # Lecture -> Lab constraint
+    for i, lec in enumerate(courses):
+        if lec['lesson_type'] != "лекц":
+            continue
+        for j, lab in enumerate(courses):
+            if lab['lesson_type'] in ["лаб","семинар"] and set(lec['group_list']) & set(lab['group_list']):
+                # lab нь лекцийн slot-оос хойш орно
+                model.Add(x_slot[j] > x_slot[i])
 
-        if not is_conflict(schedule, entry):
-            schedule.append(entry)
+    solver = cp_model.CpSolver()
+    solver.parameters.max_time_in_seconds = time_limit
+    solver.parameters.num_search_workers = 8
 
-    return [schedule]  # жагсаалт хэлбэртэй буцаана
+    schedules = []
+    res = solver.Solve(model)
+    if res not in (cp_model.FEASIBLE, cp_model.OPTIMAL):
+        return []
+
+    sch = []
+    for i in range(n):
+        s_val = solver.Value(x_slot[i])
+        r_val = solver.Value(x_room[i])
+        d,t = slot_list[s_val]
+        sch.append({
+            "day": d,
+            "time": t,
+            "room": r_val,
+            "name": courses[i]["name"],
+            "teacher": courses[i]["teacher"],
+            "lesson_type": courses[i]["lesson_type"],
+            "groups": courses[i].get("group_list",[]),
+        })
+
+    # Өдөр, цагийн дараалалд эрэмбэлэх
+    sch.sort(key=lambda x: (DAYS.index(x["day"]), TIMES.index(x["time"])))
+    schedules.append(sch)
+    return schedules

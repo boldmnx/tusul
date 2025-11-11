@@ -1,4 +1,5 @@
 
+import datetime
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -111,3 +112,41 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+def sendResponse(statusCode, data=[], action=None):
+    resJson = {}
+    resJson['action'] = action
+    resJson['resultCode'] = statusCode
+    resJson['resultMessage'] = statusMessage[statusCode]
+    resJson['data'] = data
+    resJson['size'] = len(data)
+    resJson['curDate'] = datetime.datetime.now().strftime('%Y/%m/%d %T')
+    return resJson
+
+
+statusMessage = {
+    1000: 'Бүртгэлтэй хэрэглэгч байна',
+    1001: 'Token-ний хугацаа дууссан эсвэл хүчингүй token байна',
+    1002: 'Баталгаажсан хэрэглэгч байна',
+    1004: 'Бүртгэлгүй хэрэглэгч байна',
+
+    200: 'Success',
+    204: 'No Content',
+    301: "Bad request",
+
+    404: "Not found",
+    4000: 'Invalid Method',
+    4001: 'Invalid Json',
+    4002: 'Action Missing',
+    4003: 'Invalid Action',
+    4004: 'Key дутуу',
+    4005: 'Database Error',
+    4006: '`pid` байхгүй байна',
+    4007: 'Password буруу байна',
+    4008: 'Бүртгэлээ баталгаажуулна уу',
+    4009: 'Action key байхнүй байна',
+
+    5000: 'Server Error',
+    5004: 'Register Service дотоод алдаа',
+}
