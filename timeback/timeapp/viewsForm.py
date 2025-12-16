@@ -1,13 +1,15 @@
 import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from .models import ClassGroup, Course, Room, Teacher
+from .models import Teacher, Room, ClassGroup, Course
 from timeback.settings import sendResponse
 
-# Teacher
+# ---------------- Teacher ----------------
+
+
 def addTeacher(request, data):
     try:
-        name = data.get('name')
+        name = data.get("name")
         if not name:
             return sendResponse(4009)
         obj = Teacher.objects.create(name=name)
@@ -15,6 +17,7 @@ def addTeacher(request, data):
     except Exception as e:
         print("TEACHER ADD:", e)
         return sendResponse(5001)
+
 
 def listTeacher(request, data):
     try:
@@ -24,6 +27,24 @@ def listTeacher(request, data):
         print("TEACHER LIST:", e)
         return sendResponse(5001)
 
+
+def updateTeacher(request, data):
+    try:
+        tid = data.get("id")
+        name = data.get("name")
+        if not tid or not name:
+            return sendResponse(4009)
+        t = Teacher.objects.filter(id=tid).first()
+        if not t:
+            return sendResponse(4004)
+        t.name = name
+        t.save()
+        return sendResponse(200)
+    except Exception as e:
+        print("TEACHER UPDATE:", e)
+        return sendResponse(5001)
+
+
 def deleteTeacher(request, data):
     try:
         tid = data.get("id")
@@ -32,28 +53,74 @@ def deleteTeacher(request, data):
     except:
         return sendResponse(5001)
 
-# Room
+# ---------------- Room ----------------
+
+
+def listRoom(request, data):
+    try:
+        data_list = list(Room.objects.all().values(
+            "id", "room_type", "room_number"))
+        return sendResponse(200, data_list)
+    except:
+        return sendResponse(5001)
+
+
 def addRoom(request, data):
     try:
-        room_type = data.get('room_type')
-        room_number = data.get('room_number')
-        if not room_type or not room_number:
+        room_type = data.get("room_type")
+        room_numbers = data.get("room_number")  # React-аас ирж байгаа массив
+
+        if not room_type or not room_numbers:
             return sendResponse(4009)
-        obj = Room.objects.create(
-            room_type=room_type,
-            room_number=[{"id": room_number}]
-        )
-        return sendResponse(200, {"id": obj.id})
+
+        r = Room.objects.filter(room_type=room_type).first()
+
+        if r:
+            # Давхардуулж нэмэхээс сэргийлэх
+            existing = r.room_number or []
+            for n in room_numbers:
+                if n not in existing:
+                    existing.append(n)
+            r.room_number = existing
+            r.save()
+        else:
+            r = Room.objects.create(
+                room_type=room_type, room_number=room_numbers)
+
+        return sendResponse(200, {"id": r.id})
+
     except Exception as e:
         print("ROOM ADD:", e)
         return sendResponse(5001)
 
-def listRoom(request, data):
+
+def updateRoom(request, data):
     try:
-        data_list = list(Room.objects.all().values("id", "room_type", "room_number"))
-        return sendResponse(200, data_list)
-    except:
+        rid = data.get("id")
+        room_type = data.get("room_type")
+        room_numbers = data.get("room_number")  # React-аас массив ирнэ
+        if not rid or not room_type or not room_numbers:
+            return sendResponse(4009)
+
+        r = Room.objects.filter(id=rid).first()
+        if not r:
+            return sendResponse(4004)
+
+        r.room_type = room_type
+
+        # Давхардуулалгүй шинэ жагсаалт
+        existing = r.room_number or []
+        for n in room_numbers:
+            if n not in existing:
+                existing.append(n)
+        r.room_number = existing
+        r.save()
+
+        return sendResponse(200)
+    except Exception as e:
+        print("ROOM UPDATE:", e)
         return sendResponse(5001)
+
 
 def deleteRoom(request, data):
     try:
@@ -63,30 +130,53 @@ def deleteRoom(request, data):
     except:
         return sendResponse(5001)
 
-# ClassGroup
+# ---------------- ClassGroup ----------------
+
+
 def addClassGroup(request, data):
     try:
         hutulbur = data.get("hutulbur")
         group_name = data.get("group_name")
         damjaa = data.get("damjaa")
-        if not hutulbur or not group_name or not damjaa:
+        if not hutulbur or not group_name or damjaa is None:
             return sendResponse(4009)
         obj = ClassGroup.objects.create(
-            hutulbur=hutulbur,
-            group_name=group_name,
-            damjaa=int(damjaa)
-        )
+            hutulbur=hutulbur, group_name=group_name, damjaa=int(damjaa))
         return sendResponse(200, {"id": obj.id})
     except Exception as e:
         print("CLASSGROUP ADD:", e)
         return sendResponse(5001)
 
+
 def listClassGroup(request, data):
     try:
-        data_list = list(ClassGroup.objects.all().values("id", "hutulbur", "group_name", "damjaa"))
+        data_list = list(ClassGroup.objects.all().values(
+            "id", "hutulbur", "group_name", "damjaa"))
         return sendResponse(200, data_list)
     except:
         return sendResponse(5001)
+
+
+def updateClassGroup(request, data):
+    try:
+        gid = data.get("id")
+        hutulbur = data.get("hutulbur")
+        group_name = data.get("group_name")
+        damjaa = data.get("damjaa")
+        if not gid or not hutulbur or not group_name or damjaa is None:
+            return sendResponse(4009)
+        g = ClassGroup.objects.filter(id=gid).first()
+        if not g:
+            return sendResponse(4004)
+        g.hutulbur = hutulbur
+        g.group_name = group_name
+        g.damjaa = int(damjaa)
+        g.save()
+        return sendResponse(200)
+    except Exception as e:
+        print("CLASSGROUP UPDATE:", e)
+        return sendResponse(5001)
+
 
 def deleteClassGroup(request, data):
     try:
@@ -96,32 +186,27 @@ def deleteClassGroup(request, data):
     except:
         return sendResponse(5001)
 
-# Course
+# ---------------- Course ----------------
+
+
 def addCourse(request, data):
     try:
-        name = data.get('name')
-        teacher_id = data.get('teacher_id')
-        lesson_type = data.get('lesson_type')
-        room_types = data.get('available_room_types', [])
-        groups = data.get('group_ids', [])
-
+        name = data.get("name")
+        teacher_id = data.get("teacher_id")
+        lesson_type = data.get("lesson_type")
+        room_types = data.get("available_room_types", [])
+        groups = data.get("group_ids", [])
         if not name or not teacher_id or not lesson_type:
             return sendResponse(4009)
-
         course = Course.objects.create(
-            name=name,
-            teacher_id=teacher_id,
-            lesson_type=lesson_type,
-            available_room_types=room_types
-        )
-
+            name=name, teacher_id=teacher_id, lesson_type=lesson_type, available_room_types=room_types)
         if groups:
             course.group_list.set(groups)
-
         return sendResponse(200, {"id": course.id})
     except Exception as e:
         print("COURSE ADD:", e)
         return sendResponse(5001)
+
 
 def listCourse(request, data):
     try:
@@ -139,6 +224,33 @@ def listCourse(request, data):
     except:
         return sendResponse(5001)
 
+
+def updateCourse(request, data):
+    try:
+        cid = data.get("id")
+        name = data.get("name")
+        teacher_id = data.get("teacher_id")
+        lesson_type = data.get("lesson_type")
+        room_types = data.get("available_room_types", [])
+        groups = data.get("group_ids", [])
+        if not cid or not name or not teacher_id or not lesson_type:
+            return sendResponse(4009)
+        c = Course.objects.filter(id=cid).first()
+        if not c:
+            return sendResponse(4004)
+        c.name = name
+        c.teacher_id = teacher_id
+        c.lesson_type = lesson_type
+        c.available_room_types = room_types
+        c.save()
+        if groups:
+            c.group_list.set(groups)
+        return sendResponse(200)
+    except Exception as e:
+        print("COURSE UPDATE:", e)
+        return sendResponse(5001)
+
+
 def deleteCourse(request, data):
     try:
         cid = data.get("id")
@@ -147,41 +259,44 @@ def deleteCourse(request, data):
     except:
         return sendResponse(5001)
 
-# checkService
+# ---------------- checkService ----------------
+
+
 @csrf_exempt
 def checkService(request):
-    if request.method != 'POST':
+    if request.method != "POST":
         return JsonResponse(sendResponse(4001))
-
     try:
         data = json.loads(request.body)
     except:
         return JsonResponse(sendResponse(4001))
-
     if "action" not in data:
         return JsonResponse(sendResponse(4002))
 
-    action = data['action']
+    action = data["action"]
     actions = {
         "addRoom": addRoom,
         "listRoom": listRoom,
+        "updateRoom": updateRoom,
         "deleteRoom": deleteRoom,
 
         "addTeacher": addTeacher,
         "listTeacher": listTeacher,
+        "updateTeacher": updateTeacher,
         "deleteTeacher": deleteTeacher,
 
         "addClassGroup": addClassGroup,
         "listClassGroup": listClassGroup,
+        "updateClassGroup": updateClassGroup,
         "deleteClassGroup": deleteClassGroup,
 
         "addCourse": addCourse,
         "listCourse": listCourse,
+        "updateCourse": updateCourse,
         "deleteCourse": deleteCourse,
     }
 
     if action in actions:
-        result = actions[action](request, data)  # dict буцаана
-        return JsonResponse(result)  # json.dumps хэрэггүй
-
+        result = actions[action](request, data)
+        return JsonResponse(result)
     return JsonResponse(sendResponse(4003))

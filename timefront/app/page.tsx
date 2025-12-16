@@ -1,13 +1,11 @@
 // pages/index.js
-import React from 'react';
-import Schedule from './components/Schedule';
-import scheduleData from './api/data.json'; // таны JSON файлыг энд импортлох
+import React from "react";
+import Timetable from "@/components/Timetable";
 
 export default function Home() {
   return (
-    <div>
-      <h1>Миний Хуваарь</h1>
-      <Schedule schedule={scheduleData} />
-    </div>
+    <>
+      <Timetable />
+    </>
   );
 }

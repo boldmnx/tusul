@@ -55,7 +55,7 @@ def schedule_view(request):
     schedules = generate_schedules(course_list, num_schedules=10)
     formatted_schedules = []
 
-    for i, sch in enumerate(schedules, 1):
+    for i, sch in enumerate(schedules[:1], 1):
         entries = []
         for day, time, room, course in sch:
             entries.append({
