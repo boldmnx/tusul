@@ -16,7 +16,9 @@ export default function Room() {
       body: JSON.stringify({ action: "listRoom" }),
     })
       .then((r) => r.json())
-      .then((d) => setRooms(d.data));
+      .then((d) => {
+        setRooms(d.data);
+      });
   };
 
   useEffect(() => {
@@ -29,10 +31,16 @@ export default function Room() {
     const action = editId ? "updateRoom" : "addRoom";
 
     // Зөвхөн дугаарын массив үүсгэх, object болгохгүй
+    // const numbersArray = roomNumbers
+    //   .split(",")
+    //   .map((n) => n.trim())
+    //   .filter((n) => n); // хоосон утга байхгүй болгох
+
     const numbersArray = roomNumbers
       .split(",")
       .map((n) => n.trim())
-      .filter((n) => n); // хоосон утга байхгүй болгох
+      .filter((n) => n)
+      .map((n) => ({ id: n })); // бүх элемент object хэлбэртэй болно
 
     fetch("http://127.0.0.1:8000/service/", {
       method: "POST",
@@ -64,8 +72,11 @@ export default function Room() {
   const startEdit = (r) => {
     setEditId(r.id);
     setRoomType(r.room_type);
+
     setRoomNumbers(
-      Array.isArray(r.room_number) ? r.room_number.join(", ") : ""
+      Array.isArray(r.room_number)
+        ? r.room_number.map((n) => n.id).join(", ")
+        : ""
     );
   };
 
@@ -118,9 +129,20 @@ export default function Room() {
             <tr key={r.id}>
               <td className="py-2 px-4">{i + 1}</td>
               <td className="py-2 px-4">{r.room_type}</td>
-              <td className="py-2 px-4">
+              {/* <td className="py-2 px-4">
                 {Array.isArray(r.room_number) ? r.room_number.join(", ") : ""}
+              </td> */}
+              {/* <td className="py-2 px-4">
+                {Array.isArray(r.room_number)
+                  ? r.room_number.map((n) => n.number).join(", ")
+                  : ""}
+              </td> */}
+              <td className="py-2 px-4">
+                {Array.isArray(r.room_number)
+                  ? r.room_number.map((n) => n.id).join(", ")
+                  : ""}
               </td>
+
               <td className="py-2 px-4 flex gap-2">
                 <button
                   onClick={() => startEdit(r)}

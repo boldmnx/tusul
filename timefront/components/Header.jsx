@@ -15,6 +15,9 @@ export default function Header() {
           <Link href="/" className="hover:text-gray-200">
             Home
           </Link>
+          <Link href="/huviar" className="hover:text-gray-200">
+            Хуваарь
+          </Link>
           <Link href="/form/angi" className="hover:text-gray-200">
             Анги
           </Link>

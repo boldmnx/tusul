@@ -1,9 +1,22 @@
 "use client";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import scheduleData from "@/app/api/data.json";
 
 const Timetable = () => {
-  const data = scheduleData[0].entries;
+  // const data = scheduleData[0].entries;
+
+  const [data, setData] = useState([]);
+
+  useEffect(() => {
+    fetch("http://127.0.0.1:8000/")
+      .then((res) => res.json())
+      .then((resData) => {
+        setData(resData[0].entries); // backend бүтэц
+      })
+      .catch((err) => console.error(err));
+  }, []);
+
+  if (!data.length) return <p>Ачааллаж байна...</p>;
 
   const dayMap = {
     Mon: "Даваа",
@@ -23,13 +36,16 @@ const Timetable = () => {
   const orderedDays = ["Даваа", "Мягмар", "Лхагва", "Пүрэв", "Баасан"];
 
   const groupsList = [
-    "Программ хангамж (2-1)",
-    "Программ хангамж (2-2)",
-    "Мэдээллийн систем (2-1)",
     "Мэдээллийн систем (1-1)",
     "Программ хангамж (1-1)",
+    "Программ хангамж (1-2)",
+
+    "Программ хангамж (2-1)",
+    "Мэдээллийн систем (2-1)",
+
     "Мэдээллийн систем (3-1)",
     "Программ хангамж (3-1)",
+
     "Мэдээллийн систем (4-1)",
     "Программ хангамж (4-1)",
   ];
@@ -75,7 +91,9 @@ const Timetable = () => {
                       u.teacher === l.teacher
                   );
                   if (existing) {
-                    existing.groups = [...new Set([...existing.groups, ...l.groups])];
+                    existing.groups = [
+                      ...new Set([...existing.groups, ...l.groups]),
+                    ];
                   } else {
                     uniqueLessons.push({ ...l });
                   }
@@ -107,10 +125,12 @@ const Timetable = () => {
                       // colSpan тооцох (ижил хичээл хэдэн дараалсан бүлэгт орсон)
                       if (lesson && !lesson.rendered) {
                         const startIdx = groupsList.indexOf(group);
-                        const consecutiveCount = groupsList.slice(startIdx).reduce((count, g) => {
-                          if (lesson.groups.includes(g)) return count + 1;
-                          return count;
-                        }, 0);
+                        const consecutiveCount = groupsList
+                          .slice(startIdx)
+                          .reduce((count, g) => {
+                            if (lesson.groups.includes(g)) return count + 1;
+                            return count;
+                          }, 0);
 
                         // нэгтгэсэн мөрийг нэг л удаа зурна
                         lesson.rendered = true;
@@ -133,7 +153,10 @@ const Timetable = () => {
 
                       // энэ бүлэгт хичээл байхгүй бол хоосон нүд
                       return (
-                        <td key={group} className="border border-gray-300 px-2"></td>
+                        <td
+                          key={group}
+                          className="border border-gray-300 px-2"
+                        ></td>
                       );
                     })}
                   </tr>
